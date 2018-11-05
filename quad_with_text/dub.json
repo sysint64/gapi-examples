@@ -1,0 +1,14 @@
+{
+    "name": "gapi_example",
+    "authors": [
+	"Andrey Kabylin"
+    ],
+    "dependencies": {
+        ":gapi": "*"
+    },
+    "copyright": "Copyright © 2018, Andrey",
+    "license": "MIT",
+    "subPackages": [
+        "../gapi/"
+    ]
+}

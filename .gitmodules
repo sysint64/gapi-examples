@@ -1,0 +1,3 @@
+[submodule "gapi"]
+	path = gapi
+	url = git@github.com:sysint64/gapi.git
