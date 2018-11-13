@@ -2,12 +2,12 @@ import std.stdio;
 import std.container;
 import std.file;
 import std.path;
+import std.conv;
 
 import derelict.opengl.gl;
-
-import derelict.sfml2.system;
-import derelict.sfml2.window;
-import derelict.sfml2.graphics;
+import derelict.sdl2.image;
+import derelict.sdl2.sdl;
+import derelict.sdl2.ttf;
 
 import gapi.geometry;
 import gapi.geometry_quad;
@@ -23,8 +23,8 @@ import gapi.text;
 import gl3n.linalg;
 
 struct WindowData {
-    sfWindow* window;
-    sfWindowHandle windowHandle;
+    SDL_Window* window;
+    SDL_GLContext glContext;
     int viewportWidth = 1024;
     int viewportHeight = 768;
 }
@@ -62,18 +62,19 @@ OthroCameraTransform cameraTransform = {
 };
 
 void main() {
-    DerelictSFML2System.load();
-    DerelictSFML2Window.load();
-    DerelictSFML2Graphics.load();
-
     DerelictGL3.load();
+
+    DerelictSDL2.load();
+    DerelictSDL2Image.load();
+    DerelictSDL2TTF.load();
 
     run();
 }
 
 void run() {
-    initSFML();
+    initSDL();
     initGL();
+
     onCreate();
     mainLoop();
     onDestroy();
@@ -208,52 +209,34 @@ void renderFpsText() {
     renderText(input);
 }
 
-void mainLoop() {
-    sfWindow_setActive(windowData.window, true);
-    bool running = true;
+void initSDL() {
+    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+        throw new Error("Failed to init SDL");
 
-    while (running) {
-        sfEvent event;
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetSwapInterval(1);
 
-        while (sfWindow_pollEvent(windowData.window, &event)) {
-            if (event.type == sfEvtClosed) {
-                running = false;
-            } else {
-                handleEvents(event);
-            }
-        }
+    windowData.window = SDL_CreateWindow(
+        "Simple data oriented GAPI",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        windowData.viewportWidth,
+        windowData.viewportHeight,
+        SDL_WINDOW_OPENGL
+    );
 
-        glViewport(0, 0, windowData.viewportWidth, windowData.viewportHeight);
-        glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    if (windowData.window == null)
+        throw new Error("Window could not be created! SDL Error: %s" ~ to!string(SDL_GetError()));
 
-        onProgress();
-        onRender();
+    windowData.glContext = SDL_GL_CreateContext(windowData.window);
 
-        glFlush();
-        sfWindow_display(windowData.window);
-    }
-}
+    if (windowData.glContext == null)
+        throw new Error("OpenGL context could not be created! SDL Error: %s" ~ to!string(SDL_GetError()));
 
-void initSFML() {
-    sfContextSettings settings;
-
-    with (settings) {
-        depthBits = 24;
-        stencilBits = 8;
-        antialiasingLevel = 0;
-        majorVersion = 4;
-        minorVersion = 3;
-    }
-
-    sfVideoMode videoMode = {windowData.viewportWidth, windowData.viewportHeight, 24};
-
-    const(char)* title = "Simulator";
-
-    windowData.window = sfWindow_create(videoMode, title, sfDefaultStyle, &settings);
-    windowData.windowHandle = sfWindow_getSystemHandle(windowData.window);
-
-    sfWindow_setVerticalSyncEnabled(windowData.window, true);
-    sfWindow_setFramerateLimit(windowData.window, 60);
+    SDL_GL_SwapWindow(windowData.window);
 
     DerelictGL3.reload();
 }
@@ -265,15 +248,37 @@ void initGL() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(150.0f/255.0f, 150.0f/255.0f, 150.0f/255.0f, 0);
+
+    glDebugMessageCallback(&openglCallbackFunction, null);
 }
 
-void handleEvents(in sfEvent event) {
-    switch (event.type) {
-        case sfEvtResized:
-            onResize(event.size.width, event.size.height);
-            break;
+extern(C) void openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLenum severity,
+                                      GLsizei length, const GLchar* message, const void* userParam)
+    nothrow
+    pure
+{
+}
 
-        default:
-            break;
+void mainLoop() {
+    scope(exit) SDL_GL_DeleteContext(windowData.glContext);
+    scope(exit) SDL_DestroyWindow(windowData.window);
+    scope(exit) SDL_Quit();
+
+    bool running = true;
+
+    while (running) {
+        SDL_Event event;
+
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                running = false;
+            }
+        }
+
+        glClear(GL_COLOR_BUFFER_BIT);
+        onProgress();
+        onRender();
+
+        SDL_GL_SwapWindow(windowData.window);
     }
 }
