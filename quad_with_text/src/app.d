@@ -61,6 +61,13 @@ OthroCameraTransform cameraTransform = {
     zoom: 1f
 };
 
+double currentTime = 0;
+double lastTime = 0;
+double frameTime = 0;
+
+immutable partTime = 1_000.0 / 60.0;
+int frames = 0;
+
 void main() {
     DerelictGL3.load();
 
@@ -160,13 +167,13 @@ void onResize(in uint width, in uint height) {
     windowData.viewportHeight = height;
 }
 
-void onProgress() {
+void onProgress(in float deltaTime) {
     spriteTransform.position = vec2(
         cameraTransform.viewportSize.x / 2,
         cameraTransform.viewportSize.y / 2
     );
     spriteTransform.scaling = vec2(430.0f, 600.0f);
-    spriteTransform.rotation += 0.01f;
+    spriteTransform.rotation += 0.25f * deltaTime;
 
     spriteModelMatrix = create2DModelMatrix(spriteTransform);
     cameraMatrices = createOrthoCameraMatrices(cameraTransform);
@@ -217,7 +224,9 @@ void initSDL() {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetSwapInterval(1);
+    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 16);
+
+    SDL_GL_SetSwapInterval(2);
 
     windowData.window = SDL_CreateWindow(
         "Simple data oriented GAPI",
@@ -225,7 +234,7 @@ void initSDL() {
         SDL_WINDOWPOS_CENTERED,
         windowData.viewportWidth,
         windowData.viewportHeight,
-        SDL_WINDOW_OPENGL
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
     );
 
     if (windowData.window == null)
@@ -249,7 +258,7 @@ void initGL() {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(150.0f/255.0f, 150.0f/255.0f, 150.0f/255.0f, 0);
 
-    glDebugMessageCallback(&openglCallbackFunction, null);
+    // glDebugMessageCallback(&openglCallbackFunction, null);
 }
 
 extern(C) void openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLenum severity,
@@ -266,19 +275,47 @@ void mainLoop() {
 
     bool running = true;
 
+    void render() {
+        if (currentTime >= lastTime + partTime) {
+            const deltaTime = (currentTime - lastTime) / 1000.0f;
+            onProgress(deltaTime);
+            lastTime = currentTime;
+            glClear(GL_COLOR_BUFFER_BIT);
+            onRender();
+            SDL_GL_SwapWindow(windowData.window);
+            frames += 1;
+        }
+    }
+
     while (running) {
+        currentTime = SDL_GetTicks();
+
         SDL_Event event;
 
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 running = false;
             }
+
+            if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                const width = event.window.data1;
+                const height = event.window.data2;
+
+                cameraTransform.viewportSize.x = width;
+                cameraTransform.viewportSize.y = height;
+
+                glViewport(0, 0, width, height);
+                SDL_GL_MakeCurrent(windowData.window, windowData.glContext);
+                render();
+            }
         }
 
-        glClear(GL_COLOR_BUFFER_BIT);
-        onProgress();
-        onRender();
+        render();
 
-        SDL_GL_SwapWindow(windowData.window);
+        if (currentTime >= frameTime + 1000.0) {
+            frameTime = currentTime;
+            writeln("FPS: ", frames);
+            frames = 0;
+        }
     }
 }
