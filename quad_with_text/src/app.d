@@ -50,6 +50,7 @@ Texture2D spriteTexture;
 Font dejavuFont;
 Text helloWorldText;
 UpdateTextResult helloWorldTextResult;
+UpdateTextureTextResult helloWorldTextureTextResult;
 
 ShaderProgram transformShader;
 ShaderProgram textShader;
@@ -143,7 +144,7 @@ void createTexture() {
 }
 
 void createFont() {
-    dejavuFont = createFontFromFile(buildPath("res", "DejaVuSans.ttf"));
+    dejavuFont = createFontFromFile(buildPath("res", "SourceHanSerif-Regular.otf"));
 }
 
 void createFpsText() {
@@ -187,6 +188,7 @@ void onProgress(in float deltaTime) {
         cameraMvpMatrix: cameraMatrices.mvpMatrix
     };
     helloWorldTextResult = updateText(helloWorldText, helloWorldTextInput);
+    helloWorldTextureTextResult = updateTextureText(helloWorldText, helloWorldTextInput);
 }
 
 void onRender() {
@@ -214,11 +216,22 @@ void renderFpsText() {
         updateResult: helloWorldTextResult
     };
     renderText(input);
+
+    bindShaderProgram(transformShader);
+    const RenderTextureTextInput inputTextureRender = {
+        shader: transformShader,
+        geometry: glyphGeometry,
+        updateResult: helloWorldTextureTextResult
+    };
+    renderTextureText(inputTextureRender);
 }
 
 void initSDL() {
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
         throw new Error("Failed to init SDL");
+
+    if (TTF_Init() < 0)
+        throw new Error("Failed to init SDL TTF");
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -272,6 +285,7 @@ void mainLoop() {
     scope(exit) SDL_GL_DeleteContext(windowData.glContext);
     scope(exit) SDL_DestroyWindow(windowData.window);
     scope(exit) SDL_Quit();
+    scope(exit) TTF_Quit();
 
     bool running = true;
 
