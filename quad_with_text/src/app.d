@@ -48,9 +48,8 @@ mat4 spriteModelMatrix;
 mat4 spriteMVPMatrix;
 Texture2D spriteTexture;
 Font dejavuFont;
-Text helloWorldText;
-UpdateTextResult helloWorldTextResult;
-UpdateTextureTextResult helloWorldTextureTextResult;
+Text fpsText;
+UpdateTextureTextResult fpsTextureTextResult;
 
 ShaderProgram transformShader;
 ShaderProgram textShader;
@@ -68,6 +67,7 @@ double frameTime = 0;
 
 immutable partTime = 1_000.0 / 60.0;
 int frames = 0;
+int fps = 0;
 
 void main() {
     DerelictGL3.load();
@@ -148,18 +148,28 @@ void createFont() {
 }
 
 void createFpsText() {
-    helloWorldText = createText();
+    fpsText = createText();
 }
 
 void onDestroy() {
     deleteBuffer(sprite.indicesBuffer);
     deleteBuffer(sprite.verticesBuffer);
     deleteBuffer(sprite.texCoordsBuffer);
+
     deleteShaderProgram(transformShader);
     deleteShaderProgram(textShader);
     deleteTexture2D(spriteTexture);
     deleteFont(dejavuFont);
-    deleteText(helloWorldText);
+    deleteText(fpsText);
+
+    stopSDL();
+}
+
+void stopSDL() {
+    SDL_GL_DeleteContext(windowData.glContext);
+    SDL_DestroyWindow(windowData.window);
+    SDL_Quit();
+    TTF_Quit();
 }
 
 void onResize(in uint width, in uint height) {
@@ -180,15 +190,14 @@ void onProgress(in float deltaTime) {
     cameraMatrices = createOrthoCameraMatrices(cameraTransform);
     spriteMVPMatrix = cameraMatrices.mvpMatrix * spriteModelMatrix;
 
-    const UpdateTextInput helloWorldTextInput = {
+    UpdateTextInput fpsTextInput = {
         textSize: 32,
-        font: dejavuFont,
-        text: "Hello world!",
+        font: &dejavuFont,
+        text: "FPS: " ~ to!dstring(fps) ~ " | Unicode: 日本語"d,
         position: glyphTransform.position,
         cameraMvpMatrix: cameraMatrices.mvpMatrix
     };
-    helloWorldTextResult = updateText(helloWorldText, helloWorldTextInput);
-    helloWorldTextureTextResult = updateTextureText(helloWorldText, helloWorldTextInput);
+    fpsTextureTextResult = updateTextureText(&fpsText, fpsTextInput);
 }
 
 void onRender() {
@@ -210,18 +219,11 @@ void renderFpsText() {
     bindShaderProgram(textShader);
     setShaderProgramUniformVec4f(textShader, "color", vec4(0, 0, 0, 1.0f));
 
-    const RenderTextInput input = {
-        shader: textShader,
-        glyphGeometry: glyphGeometry,
-        updateResult: helloWorldTextResult
-    };
-    renderText(input);
-
     bindShaderProgram(transformShader);
     const RenderTextureTextInput inputTextureRender = {
         shader: transformShader,
         geometry: glyphGeometry,
-        updateResult: helloWorldTextureTextResult
+        updateResult: fpsTextureTextResult
     };
     renderTextureText(inputTextureRender);
 }
@@ -282,11 +284,6 @@ extern(C) void openglCallbackFunction(GLenum source, GLenum type, GLuint id, GLe
 }
 
 void mainLoop() {
-    scope(exit) SDL_GL_DeleteContext(windowData.glContext);
-    scope(exit) SDL_DestroyWindow(windowData.window);
-    scope(exit) SDL_Quit();
-    scope(exit) TTF_Quit();
-
     bool running = true;
 
     void render() {
@@ -328,8 +325,8 @@ void mainLoop() {
 
         if (currentTime >= frameTime + 1000.0) {
             frameTime = currentTime;
-            writeln("FPS: ", frames);
-            frames = 0;
+            fps = frames;
+            frames = 1;
         }
     }
 }
